@@ -87,4 +87,5 @@ streamlit run app.py
 
 ## License
 
-MIT
+This project has been done by Shreya Chennupati
+Contributions are allowed
