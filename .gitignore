@@ -1,7 +1,42 @@
-venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
 .env
-.DS_Store
+
+# Data
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Models
+models/tfidf/*
+!models/tfidf/.gitkeep
+models/embeddings/*
+!models/embeddings/.gitkeep
+
+# Reports
+reports/*
+!reports/.gitkeep
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kaggle
+kaggle.json
+
+# Logs
+*.log

@@ -1,0 +1,305 @@
+/* CareerPath AI - Light, scroll effects, captivating */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --secondary: #0ea5e9;
+  --accent: #22c55e;
+  --bg: #f8fafc;
+  --bg-gradient: linear-gradient(135deg, #f0f4ff 0%, #e8f4fd 50%, #fdf4ff 100%);
+  --card: rgba(255,255,255,0.95);
+  --card-glass: rgba(255,255,255,0.8);
+  --border: rgba(99, 102, 241, 0.2);
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --shadow: 0 4px 20px rgba(99, 102, 241, 0.12);
+  --shadow-lg: 0 8px 40px rgba(99, 102, 241, 0.18);
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important; }
+
+/* Light base with gradient + subtle animated background */
+.stApp, [data-testid="stAppViewContainer"] {
+  background: var(--bg-gradient) !important;
+  background-attachment: fixed !important;
+  color: var(--text) !important;
+}
+
+/* Animated gradient layer - always moving */
+.stApp::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: 
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99,102,241,0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(14,165,233,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 30% at 50% 50%, rgba(139,92,246,0.08) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+  animation: bgPulse 6s ease-in-out infinite alternate !important;
+}
+
+@keyframes bgPulse {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.02); }
+}
+
+/* Scroll-style fade-in animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Scroll-like reveal — target Streamlit blocks broadly */
+section.main [data-testid="stVerticalBlock"] > div,
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div,
+div[data-testid="stVerticalBlock"] > div {
+  animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
+section.main [data-testid="stVerticalBlock"] > div:nth-child(1),
+div[data-testid="stVerticalBlock"] > div:nth-child(1) { animation-delay: 0.05s !important; }
+section.main [data-testid="stVerticalBlock"] > div:nth-child(2),
+div[data-testid="stVerticalBlock"] > div:nth-child(2) { animation-delay: 0.1s !important; }
+section.main [data-testid="stVerticalBlock"] > div:nth-child(3),
+div[data-testid="stVerticalBlock"] > div:nth-child(3) { animation-delay: 0.15s !important; }
+section.main [data-testid="stVerticalBlock"] > div:nth-child(n+4),
+div[data-testid="stVerticalBlock"] > div:nth-child(n+4) { animation-delay: 0.2s !important; }
+
+/* Home hero */
+.home-hero {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(14,165,233,0.08) 50%, rgba(139,92,246,0.08) 100%);
+  border-radius: 20px;
+  border: 2px solid rgba(99,102,241,0.2);
+  margin-bottom: 1rem;
+  animation: fadeInUp 0.6s ease-out;
+}
+.hero-title {
+  font-size: 2.2rem !important;
+  margin: 0 !important;
+  background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 50%, #8b5cf6 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+.hero-sub {
+  font-size: 1.1rem !important;
+  color: #64748b !important;
+  margin: 0.5rem 0 !important;
+}
+.hero-greet {
+  font-size: 1rem !important;
+  margin: 0.5rem 0 0 0 !important;
+  color: #0f172a !important;
+}
+
+/* Smooth scroll behavior */
+html { scroll-behavior: smooth; }
+
+/* Buttons - smooth transitions + subtle glow */
+.stButton > button {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease !important;
+}
+
+/* Metrics - subtle pulse so they feel alive */
+[data-testid="stMetricValue"] {
+  animation: metricPulse 3s ease-in-out infinite alternate !important;
+}
+
+@keyframes metricPulse {
+  0% { opacity: 0.9; }
+  100% { opacity: 1; }
+}
+
+/* Main content - above floating orbs */
+section.main, [data-testid="stAppViewContainer"] > section {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.main .block-container {
+  padding-top: 2rem !important;
+  padding-bottom: 4rem !important;
+  max-width: 1200px !important;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+  background: var(--card) !important;
+  backdrop-filter: blur(12px);
+  border-right: 1px solid var(--border) !important;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6, p, span, label, div {
+  color: var(--text) !important;
+}
+
+h1, h2, h3 {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Tabs - pill style */
+.stTabs [data-baseweb="tab-list"] {
+  background: var(--card-glass) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 6px !important;
+  gap: 4px !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+  color: var(--text-muted) !important;
+  font-weight: 600 !important;
+  padding: 10px 20px !important;
+  border-radius: 10px !important;
+  transition: var(--transition) !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+  color: var(--primary) !important;
+  background: rgba(99,102,241,0.08) !important;
+}
+
+.stTabs [aria-selected="true"] {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  color: white !important;
+  box-shadow: var(--shadow) !important;
+}
+
+/* Primary buttons */
+.stButton > button[kind="primary"],
+div[data-testid="column"] button[kind="primary"] {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: var(--radius) !important;
+  font-weight: 600 !important;
+  padding: 12px 28px !important;
+  box-shadow: var(--shadow) !important;
+  transition: var(--transition) !important;
+}
+
+.stButton > button[kind="primary"]:hover,
+div[data-testid="column"] button[kind="primary"]:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* Secondary buttons */
+.stButton > button[kind="secondary"],
+div[data-testid="column"] button[kind="secondary"] {
+  background: var(--card-glass) !important;
+  backdrop-filter: blur(10px);
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  transition: var(--transition) !important;
+}
+
+.stButton > button[kind="secondary"]:hover,
+div[data-testid="column"] button[kind="secondary"]:hover {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  background: rgba(99,102,241,0.08) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Cards / Expanders - glass with hover */
+div[data-testid="stExpander"] {
+  background: var(--card) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow) !important;
+  margin-bottom: 0.75rem !important;
+  transition: var(--transition) !important;
+}
+
+div[data-testid="stExpander"]:hover {
+  box-shadow: var(--shadow-lg) !important;
+  transform: translateY(-2px) !important;
+}
+
+div[data-testid="stExpander"] summary {
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+
+/* Metrics */
+[data-testid="stMetricValue"] {
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-testid="stMetricLabel"] {
+  color: var(--text-muted) !important;
+  font-size: 0.85rem !important;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+  background: var(--card) !important;
+  border: 2px dashed var(--primary) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 2.5rem !important;
+  transition: var(--transition) !important;
+}
+
+[data-testid="stFileUploader"]:hover {
+  border-color: var(--secondary) !important;
+  background: rgba(99,102,241,0.05) !important;
+}
+
+/* Inputs */
+.stTextInput > div > div input,
+.stTextInput input {
+  border-radius: var(--radius) !important;
+  border: 2px solid var(--border) !important;
+  transition: var(--transition) !important;
+}
+
+.stTextInput input:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 4px rgba(99,102,241,0.15) !important;
+}
+
+/* Links */
+a {
+  color: var(--primary) !important;
+}
+
+/* Dividers */
+hr {
+  border-color: var(--border) !important;
+}
+
+/* Hide Streamlit branding */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }

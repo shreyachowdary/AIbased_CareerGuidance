@@ -1,0 +1,120 @@
+# AI Career Guidance - Skills Vocabulary
+# One skill per line. Multi-word skills supported. Lines starting with # ignored.
+# Format: canonical_name (aliases in extractor via normalization map)
+
+# Software Engineering
+python
+java
+javascript
+typescript
+c++
+c#
+go
+golang
+rust
+kotlin
+swift
+php
+ruby
+scala
+r
+sql
+nosql
+mongodb
+redis
+postgresql
+mysql
+react
+angular
+vue
+node
+nodejs
+express
+django
+flask
+fastapi
+spring
+spring boot
+asp.net
+graphql
+rest api
+microservices
+git
+docker
+kubernetes
+jenkins
+ci/cd
+agile
+scrum
+jira
+linux
+unix
+bash
+powershell
+
+# Data & Analytics
+pandas
+numpy
+etl
+data engineering
+data pipeline
+spark
+apache spark
+pyspark
+airflow
+dbt
+snowflake
+redshift
+bigquery
+data warehouse
+data modeling
+tableau
+power bi
+looker
+excel
+statistics
+analytics
+
+# AI/ML
+machine learning
+deep learning
+nlp
+natural language processing
+computer vision
+pytorch
+tensorflow
+keras
+scikit-learn
+sklearn
+transformers
+hugging face
+llm
+large language models
+openai
+langchain
+vector database
+embedding
+recommendation systems
+
+# Cloud & DevOps
+aws
+amazon web services
+azure
+google cloud
+gcp
+terraform
+ansible
+cloud
+devops
+sre
+kubernetes
+docker
+containers
+
+# Soft & Domain
+project management
+leadership
+communication
+problem solving
+technical writing
+documentation

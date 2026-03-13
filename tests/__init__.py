@@ -1,1 +1,1 @@
-# Tests for AI Career Guidance System
+"""Optional test package."""

@@ -1,0 +1,25 @@
+JOHN DOE
+Data Scientist | Machine Learning Engineer
+Email: john.doe@email.com | LinkedIn: linkedin.com/in/johndoe
+
+SUMMARY
+Experienced data scientist with 4+ years building ML models and analytics pipelines.
+Strong in Python, SQL, and cloud platforms. Passionate about NLP and computer vision.
+
+SKILLS
+Python, SQL, Machine Learning, TensorFlow, PyTorch, AWS, Docker, Statistics,
+Data Visualization, Pandas, Scikit-learn, Git, Jupyter
+
+EXPERIENCE
+Senior Data Scientist | TechCorp | 2021 - Present
+- Built recommendation systems serving 2M users
+- Deployed ML models on AWS SageMaker
+- Led A/B testing and analytics
+
+Data Analyst | Analytics Inc | 2019 - 2021
+- Created dashboards in Tableau and Looker
+- Wrote ETL pipelines in Python and SQL
+
+EDUCATION
+MS Computer Science | State University | 2019
+BS Mathematics | State University | 2017
