@@ -1,6 +1,6 @@
 """
 Fetch real job listings from JSearch API (aggregates LinkedIn, Indeed, Glassdoor, etc.).
-Key resolution order: session override → JSEARCH_API_KEY env / .env → Streamlit secrets.
+Key resolution order: session override → JSEARCH_API_KEY env / .env → `.streamlit/secrets.toml` (file read only if it exists; we do not use `st.secrets`, which errors when the file is missing).
 """
 
 import os
@@ -26,6 +26,41 @@ JSEARCH_URL = "https://jsearch.p.rapidapi.com/search"
 
 _key_override: Optional[str] = None
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _read_jsearch_from_secrets_toml_files() -> str:
+    """Read key from secrets.toml if present. Avoids st.secrets (Streamlit errors if file absent)."""
+    candidates = [
+        _PROJECT_ROOT / ".streamlit" / "secrets.toml",
+        Path.home() / ".streamlit" / "secrets.toml",
+    ]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            try:
+                import tomllib
+
+                data = tomllib.loads(raw)
+                v = data.get("JSEARCH_API_KEY")
+            except Exception:
+                v = None
+                for line in raw.splitlines():
+                    s = line.split("#", 1)[0].strip()
+                    if s.upper().startswith("JSEARCH_API_KEY"):
+                        _, _, rest = s.partition("=")
+                        rest = rest.strip().strip('"').strip("'")
+                        if rest:
+                            v = rest
+                            break
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        except Exception:
+            continue
+    return ""
+
 
 def set_jsearch_api_key(key: Optional[str]) -> None:
     """Streamlit session can set this so users don't have to rely only on .env."""
@@ -43,16 +78,7 @@ def get_jsearch_api_key() -> str:
     env_key = (os.environ.get("JSEARCH_API_KEY", "") or "").strip()
     if env_key:
         return env_key
-    try:
-        import streamlit as st
-
-        if hasattr(st, "secrets") and "JSEARCH_API_KEY" in st.secrets:
-            sec = st.secrets["JSEARCH_API_KEY"]
-            if sec is not None and str(sec).strip():
-                return str(sec).strip()
-    except Exception:
-        pass
-    return ""
+    return _read_jsearch_from_secrets_toml_files()
 
 
 def jsearch_configured() -> bool:

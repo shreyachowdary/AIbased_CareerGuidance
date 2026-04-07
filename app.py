@@ -735,9 +735,11 @@ def render_matches():
     recs = st.session_state.recommendations
     live = st.session_state.live_analysis or {}
     if live.get("ok") and live.get("recommendations"):
-        gap_df = live["recommendations"].get("skill_gaps_df") or pd.DataFrame()
+        _raw_gaps = live["recommendations"].get("skill_gaps_df")
     else:
-        gap_df = recs["skill_gaps_df"] if recs else pd.DataFrame()
+        _raw_gaps = (recs or {}).get("skill_gaps_df")
+    # Never use `df or pd.DataFrame()` — empty DataFrame is falsy and triggers ambiguous truth-value errors.
+    gap_df = _raw_gaps if isinstance(_raw_gaps, pd.DataFrame) else pd.DataFrame()
     display_count = st.session_state.jobs_display_count
     jobs_slice = jobs_to_show.head(display_count)
 
