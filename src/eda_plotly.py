@@ -162,3 +162,45 @@ def plot_skill_match_gaps_plotly(gap_df, top_n: int = 10) -> go.Figure:
         yaxis_title="Count",
     )
     return fig
+
+
+def plot_role_market_fit_plotly(role_fit_df: pd.DataFrame, top_n: int = 12) -> go.Figure:
+    """Horizontal bar: resume fit vs aggregated real postings per job title (corpus-backed)."""
+    if role_fit_df is None or role_fit_df.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No role-level market data. Load the LinkedIn job corpus (cleaned dataset).",
+            x=0.5, y=0.5, showarrow=False, font={"size": 14},
+        )
+        fig.update_layout(**LAYOUT, height=320)
+        return fig
+    df = role_fit_df.head(top_n).copy()
+    if "role_display" not in df.columns:
+        df["role_display"] = df.get("role_key", "")
+    y = df["role_display"].astype(str)
+    y = [t[:42] + "…" if len(t) > 43 else t for t in y]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                name="Fit vs market (corpus)",
+                x=df["fit_score"].astype(float),
+                y=y,
+                orientation="h",
+                marker_color=COLORS["primary"],
+                text=df["postings_in_corpus"].apply(lambda n: f"n={int(n)}"),
+                textposition="outside",
+            )
+        ]
+    )
+    # Merge axis dicts so we don't pass `yaxis` twice (**LAYOUT already sets yaxis).
+    xaxis = {**LAYOUT.get("xaxis", {}), "title": "Combined fit score (text + market skills)"}
+    yaxis = {**LAYOUT.get("yaxis", {}), "title": "", "autorange": "reversed"}
+    layout_rest = {k: v for k, v in LAYOUT.items() if k not in ("xaxis", "yaxis")}
+    fig.update_layout(
+        **layout_rest,
+        height=max(360, min(720, 80 + top_n * 36)),
+        title="Where you fit best vs real posting data (aggregated by title)",
+        xaxis=xaxis,
+        yaxis=yaxis,
+    )
+    return fig

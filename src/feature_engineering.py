@@ -8,7 +8,7 @@ from typing import List, Set
 
 import pandas as pd
 
-from src.skill_curation import extract_prominent_skills, is_prominent_skill, map_abbrev
+from src.skill_curation import ABBREV_TO_SKILL, extract_prominent_skills, is_prominent_skill
 from utils.logging_config import get_logger
 
 logger = get_logger("feature_engineering")
@@ -85,11 +85,17 @@ def build_skill_set_per_job(df: pd.DataFrame) -> pd.Series:
     def _build(raw, desc):
         combined: Set[str] = set()
         for ab in (raw or []):
-            if isinstance(ab, str) and ab.strip():
-                mapped = map_abbrev(ab)
-                # Only add if we have a mapping (avoid unknown abbrevs like PRJM if not in map)
-                if mapped and mapped != ab:
-                    combined.add(mapped)
+            if not isinstance(ab, str) or not ab.strip():
+                continue
+            s = ab.strip()
+            key = s.upper()
+            # LinkedIn 2023-style domain codes (ENG, PRJM, …)
+            if key in ABBREV_TO_SKILL:
+                combined.add(ABBREV_TO_SKILL[key])
+                continue
+            # JSearch / human-readable skill tags (Python, Machine Learning, …)
+            if is_prominent_skill(s):
+                combined.add(s)
         for s in extract_prominent_skills(str(desc or "")):
             combined.add(s)
         return list(combined)

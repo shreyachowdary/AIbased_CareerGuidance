@@ -23,6 +23,14 @@ logger = get_logger("data_ingestion")
 LINKEDIN_2023_RAW = RAW_DATA_DIR / "linkedin_jobs_2023.csv"
 
 
+def linkedin_loader_sample_frac() -> Optional[float]:
+    """None = full LinkedIn 2023 merge; set LINKEDIN_SAMPLE_FRAC=0.1 for a quick dev sample."""
+    import os
+
+    env_s = os.environ.get("LINKEDIN_SAMPLE_FRAC", "").strip()
+    return float(env_s) if env_s else None
+
+
 def _try_linkedin_2023() -> Optional[pd.DataFrame]:
     """Load LinkedIn 2023 if available (from download script)."""
     if LINKEDIN_2023_RAW.exists():
@@ -35,6 +43,7 @@ def _find_data_file() -> Optional[Path]:
     """Locate job postings CSV in raw or processed dir, or project root."""
     candidates = [
         RAW_DATA_DIR / DEFAULT_JOB_CSV,
+        RAW_DATA_DIR / "linkedin_jobs_sample.csv",
         RAW_DATA_DIR / "sample_jobs_expanded.csv",
         RAW_DATA_DIR / "sample_jobs.csv",
         RAW_DATA_DIR / "jobs.csv",
@@ -90,14 +99,14 @@ def load_raw_dataset(path=None) -> pd.DataFrame:
         p = Path(env_path)
         if p.is_dir() and (p / "job_postings.csv").exists():
             from src.linkedin_2023_loader import load_linkedin_2023
-            return load_linkedin_2023(p, sample_frac=0.1)
+            return load_linkedin_2023(p, sample_frac=linkedin_loader_sample_frac())
 
     # 3) Explicit path - could be LinkedIn 2023 folder from kagglehub
     if path is not None:
         p = Path(path)
         if p.is_dir() and (p / "job_postings.csv").exists():
             from src.linkedin_2023_loader import load_linkedin_2023
-            return load_linkedin_2023(p, sample_frac=0.1)
+            return load_linkedin_2023(p, sample_frac=linkedin_loader_sample_frac())
         if str(p).endswith(".csv"):
             df = pd.read_csv(p, low_memory=False, on_bad_lines="skip")
             df = _map_columns(df)

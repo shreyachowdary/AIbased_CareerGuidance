@@ -1,6 +1,6 @@
 """
 Fetch real job listings from JSearch API (aggregates LinkedIn, Indeed, Glassdoor, etc.).
-Requires JSEARCH_API_KEY in environment. Free tier: 500 requests/month.
+Key resolution order: session override → JSEARCH_API_KEY env / .env → Streamlit secrets.
 """
 
 import os
@@ -21,9 +21,71 @@ try:
 except ImportError:
     pass
 
-JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY", "")
 JSEARCH_HOST = "jsearch.p.rapidapi.com"
 JSEARCH_URL = "https://jsearch.p.rapidapi.com/search"
+
+_key_override: Optional[str] = None
+
+
+def set_jsearch_api_key(key: Optional[str]) -> None:
+    """Streamlit session can set this so users don't have to rely only on .env."""
+    global _key_override
+    if key is None or not str(key).strip():
+        _key_override = None
+    else:
+        _key_override = str(key).strip()
+
+
+def get_jsearch_api_key() -> str:
+    """Effective RapidAPI key for JSearch."""
+    if _key_override:
+        return _key_override
+    env_key = (os.environ.get("JSEARCH_API_KEY", "") or "").strip()
+    if env_key:
+        return env_key
+    try:
+        import streamlit as st
+
+        if hasattr(st, "secrets") and "JSEARCH_API_KEY" in st.secrets:
+            sec = st.secrets["JSEARCH_API_KEY"]
+            if sec is not None and str(sec).strip():
+                return str(sec).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def jsearch_configured() -> bool:
+    return bool(get_jsearch_api_key())
+
+
+def _apply_link_from_option(opt: Any) -> str:
+    if not isinstance(opt, dict):
+        return ""
+    for key in ("apply_link", "url", "link", "application_url"):
+        v = opt.get(key)
+        if isinstance(v, str) and v.strip().lower().startswith("http"):
+            return v.strip()
+    return ""
+
+
+def _best_apply_url(job: Dict[str, Any]) -> str:
+    """Prefer direct apply link, then any publisher option, then Google Jobs / employer site."""
+    link = (job.get("job_apply_link") or "").strip()
+    if link.lower().startswith("http"):
+        return link
+    for opt in job.get("apply_options") or []:
+        al = _apply_link_from_option(opt)
+        if al:
+            return al
+    g = (job.get("job_google_link") or "").strip()
+    if g.lower().startswith("http"):
+        return g
+    for key in ("employer_website", "employer_url", "employer_website_url"):
+        u = (job.get(key) or "").strip()
+        if u.lower().startswith("http"):
+            return u
+    return ""
 
 
 def fetch_jobs_from_api(
@@ -42,7 +104,8 @@ def fetch_jobs_from_api(
     Returns:
         DataFrame with job_id, title, company, location, job_type, posted_date, description, skills.
     """
-    if not JSEARCH_API_KEY:
+    api_key = get_jsearch_api_key()
+    if not api_key:
         return None
 
     all_jobs: List[Dict[str, Any]] = []
@@ -51,7 +114,7 @@ def fetch_jobs_from_api(
             resp = requests.get(
                 JSEARCH_URL,
                 headers={
-                    "X-RapidAPI-Key": JSEARCH_API_KEY,
+                    "X-RapidAPI-Key": api_key,
                     "X-RapidAPI-Host": JSEARCH_HOST,
                 },
                 params={
@@ -77,6 +140,7 @@ def fetch_jobs_from_api(
                     pass
                 else:
                     skills = ""
+                apply_url = _best_apply_url(j)
                 all_jobs.append({
                     "job_id": j.get("job_id", f"api_{len(all_jobs)}"),
                     "title": j.get("job_title", ""),
@@ -86,7 +150,9 @@ def fetch_jobs_from_api(
                     "posted_date": j.get("job_posted_at_datetime_utc", ""),
                     "description": j.get("job_description", ""),
                     "skills": skills,
-                    "apply_link": j.get("job_apply_link", ""),
+                    "apply_link": apply_url,
+                    "job_google_link": (j.get("job_google_link") or "").strip(),
+                    "job_publisher": (j.get("job_publisher") or "").strip(),
                 })
         except Exception as e:
             logger.warning("JSearch API error (page %d): %s", page + 1, e)
@@ -109,11 +175,11 @@ def fetch_jobs_for_skills(
     Fetch jobs matching user skills.
     date_posted: "all", "today", "3days", "week", "month"
     """
-    if not JSEARCH_API_KEY:
+    if not get_jsearch_api_key():
         return pd.DataFrame()
 
     if queries:
-        search_queries = queries[:5]
+        search_queries = queries[:8]
     else:
         top = skills[:5] if skills else ["Data Scientist", "Software Engineer"]
         search_queries = [f"{s} jobs" for s in top]
@@ -139,7 +205,7 @@ def fetch_recent_jobs_for_roles(
     """
     Fetch last 24h (today) jobs for top roles. Load as many as possible.
     """
-    if not JSEARCH_API_KEY:
+    if not get_jsearch_api_key():
         return pd.DataFrame()
 
     all_dfs: List[pd.DataFrame] = []

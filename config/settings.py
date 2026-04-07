@@ -48,6 +48,11 @@ MAX_RESUME_SIZE_MB = 5
 TOP_N_MATCHES = 25
 MIN_SKILL_OVERLAP = 0.1
 
+# Role-level market fit (aggregated postings in downloaded corpus)
+ROLE_MARKET_MIN_POSTINGS = 12
+ROLE_MARKET_MAX_ROLES = 45
+ROLE_MARKET_TOP_SKILLS_PER_ROLE = 30
+
 # EDA / viz
 PLOT_STYLE = "seaborn-v0_8-whitegrid"
 FIGURE_DPI = 120

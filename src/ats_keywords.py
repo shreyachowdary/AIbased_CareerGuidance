@@ -2,7 +2,7 @@
 ATS (Applicant Tracking System) keywords: extract and match resume against job market.
 """
 
-from typing import List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from utils.logging_config import get_logger
 
@@ -76,3 +76,42 @@ def get_ats_keywords_from_jobs(job_skills_series) -> Set[str]:
             if isinstance(s, str) and len(s) > 1:
                 keywords.add(_normalize(s))
     return keywords
+
+
+def _resume_evidence_for_keyword(kw: str, resume_skills: List[str], resume_text: str) -> str:
+    """How the resume shows this job-market keyword (skill line vs body)."""
+    kn = _normalize(kw)
+    for s in resume_skills:
+        if not s:
+            continue
+        sn = _normalize(str(s))
+        if sn == kn or kn in sn or sn in kn or kn.replace(" ", "") in sn.replace(" ", ""):
+            return f"Listed as skill: **{s}**"
+    return "Mentioned in resume (matches job-market keyword)"
+
+
+def build_ats_resume_job_alignment(
+    resume_skills: List[str],
+    resume_text: str,
+    job_keywords: Set[str],
+) -> Tuple[List[Dict[str, str]], List[str]]:
+    """
+    Compare resume to vocabulary from **matched target jobs** only (no generic ATS list on upload).
+
+    Returns:
+        matched_rows: [{ "keyword": normalized term from jobs, "evidence": str }, ...]
+        missing: job-market terms not found in the resume
+    """
+    resume_set = {_normalize(s) for s in resume_skills if s}
+    text_lower = _normalize(resume_text or "")
+    matched_rows: List[Dict[str, str]] = []
+    missing: List[str] = []
+    for kw in sorted(job_keywords):
+        if _keyword_in_resume(kw, resume_set, text_lower):
+            matched_rows.append({
+                "keyword": kw,
+                "evidence": _resume_evidence_for_keyword(kw, resume_skills, resume_text or ""),
+            })
+        else:
+            missing.append(kw)
+    return matched_rows, missing

@@ -1,8 +1,16 @@
 """FastAPI application for AI Career Guidance."""
+from pathlib import Path
+import sys
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 
 from backend.app.core.config import PROCESSED_CSV
+from backend.app.routes.analysis import router as analysis_router
 from backend.app.core.logger import logger
 from backend.app.schemas import (
     ActionPlan,
@@ -19,6 +27,7 @@ from backend.app.services.recommender_tfidf import recommend as tfidf_recommend
 from backend.app.services.skill_extraction import extract_skills
 
 app = FastAPI(title="AI Career Guidance API", version="1.0.0")
+app.include_router(analysis_router)
 
 _jobs_df: pd.DataFrame | None = None
 

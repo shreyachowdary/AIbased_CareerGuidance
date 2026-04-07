@@ -91,6 +91,9 @@ def main():
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     csv_path = RAW_DIR / "linkedin_jobs_sample.csv"
     df = pd.DataFrame(SAMPLE_JOBS)
+    df2 = df.copy()
+    df2["title"] = df2["title"].astype(str) + " (alt posting)"
+    df = pd.concat([df, df2], ignore_index=True)
     df.to_csv(csv_path, index=False)
     print(f"Created {csv_path} with {len(df)} rows")
     print("Run: python scripts/preprocess.py")

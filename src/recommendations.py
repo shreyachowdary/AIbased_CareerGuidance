@@ -109,6 +109,20 @@ def build_learning_roadmap(
     return roadmap
 
 
+def empty_recommendations() -> dict:
+    """Baseline recommendation payload with no per-job gaps (for corpus-only enrichment)."""
+    return {
+        "missing_skills": [],
+        "missing_with_freq": [],
+        "skill_gaps_df": pd.DataFrame(),
+        "course_recommendations": [],
+        "learning_roadmap": [],
+        "market_role_focus": "",
+        "gaps_source": "matched_postings",
+        "market_prioritized_skills": set(),
+    }
+
+
 def generate_all_recommendations(
     user_skills: List[str],
     matched_jobs: pd.DataFrame,
@@ -136,4 +150,56 @@ def generate_all_recommendations(
         "skill_gaps_df": gap_df,
         "course_recommendations": course_recs,
         "learning_roadmap": roadmap,
+        "market_role_focus": "",
+        "gaps_source": "matched_postings",
+        "market_prioritized_skills": set(),
     }
+
+
+def augment_recommendations_with_market_role(recs: dict, top_role_row: pd.Series) -> dict:
+    """
+    Re-rank gaps, courses, and roadmap using skills that are **often required** for the
+    corpus role that best matches the resume (first row of role-market fit).
+    """
+    if top_role_row is None or top_role_row.empty:
+        return recs
+    gaps = top_role_row.get("market_skills_gap")
+    if gaps is None or (isinstance(gaps, float) and pd.isna(gaps)):
+        gaps = []
+    if not isinstance(gaps, list):
+        gaps = list(gaps) if hasattr(gaps, "__iter__") and not isinstance(gaps, str) else []
+
+    role_name = str(top_role_row.get("role_display") or top_role_row.get("role_key") or "").strip()
+    n_post = int(top_role_row.get("postings_in_corpus") or 0)
+
+    market_pairs: List[Tuple[str, int]] = []
+    base = 250
+    for i, s in enumerate(gaps):
+        if not s or not is_valid_skill(str(s)) or not is_recommendable_skill(str(s)):
+            continue
+        market_pairs.append((str(s).strip(), base - i))
+
+    if not market_pairs:
+        return recs
+
+    old_pairs = list(recs.get("missing_with_freq") or [])
+    seen = {str(s).strip().lower() for s, _ in market_pairs}
+    rest = [(s, f) for s, f in old_pairs if str(s).strip().lower() not in seen]
+
+    merged = market_pairs + rest
+    missing_list = [s for s, _ in merged[:40]]
+
+    course_recs = get_course_recommendations(missing_list)
+    roadmap = build_learning_roadmap(merged, course_recs)
+
+    out = dict(recs)
+    out["missing_skills"] = missing_list
+    out["missing_with_freq"] = merged[:45]
+    out["course_recommendations"] = course_recs
+    out["learning_roadmap"] = roadmap
+    out["market_role_focus"] = role_name
+    out["market_role_postings"] = n_post
+    out["market_role_gap_count"] = len(market_pairs)
+    out["gaps_source"] = "corpus_best_role" if market_pairs else "matched_postings"
+    out["market_prioritized_skills"] = {str(s).strip().lower() for s, _ in market_pairs}
+    return out
