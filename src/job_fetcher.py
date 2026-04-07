@@ -4,6 +4,7 @@ Key resolution order: session override → JSEARCH_API_KEY env / .env → `.stre
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -204,17 +205,65 @@ def fetch_jobs_for_skills(
     if not get_jsearch_api_key():
         return pd.DataFrame()
 
-    if queries:
-        search_queries = queries[:8]
-    else:
-        top = skills[:5] if skills else ["Data Scientist", "Software Engineer"]
-        search_queries = [f"{s} jobs" for s in top]
+    def _normalize_query(q: str) -> List[str]:
+        """Generate broad, API-friendly alternatives for overly specific strings."""
+        raw = (q or "").strip()
+        if not raw:
+            return []
+        cleaned = re.sub(r"\s+", " ", raw)
+        variants: List[str] = [cleaned]
+        # First segment is usually the role; suffixes often kill recall.
+        for sep in (" - ", " — ", " | ", " • ", " / "):
+            if sep in cleaned:
+                variants.append(cleaned.split(sep, 1)[0].strip())
+        # Remove obvious org/rank suffix fragments.
+        stripped = re.sub(
+            r"\b(open rank|institute|university|department|lab|research|atas)\b.*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip(" -|•/")
+        if stripped and stripped not in variants:
+            variants.append(stripped)
+        out: List[str] = []
+        seen = set()
+        for v in variants:
+            if not v:
+                continue
+            qv = f"{v} jobs" if "jobs" not in v.lower() else v
+            key = qv.lower()
+            if key not in seen:
+                seen.add(key)
+                out.append(qv)
+        return out
+
+    seed_queries = queries[:8] if queries else []
+    if not seed_queries:
+        top = skills[:5] if skills else ["Data Scientist", "Software Engineer", "Machine Learning Engineer"]
+        seed_queries = [f"{s} jobs" for s in top]
+
+    search_queries: List[str] = []
+    seen_q = set()
+    for q in seed_queries + ["Software Engineer jobs", "Machine Learning Engineer jobs", "Data Scientist jobs"]:
+        for alt in _normalize_query(q):
+            lk = alt.lower()
+            if lk not in seen_q:
+                seen_q.add(lk)
+                search_queries.append(alt)
 
     all_dfs: List[pd.DataFrame] = []
-    for q in search_queries:
+    # Primary pass: requested date filter.
+    for q in search_queries[:12]:
         df = fetch_jobs_from_api(q, num_pages=num_pages_per_query, date_posted=date_posted)
         if df is not None and not df.empty:
             all_dfs.append(df)
+
+    # Fallback pass: broaden recency filter if primary pass returned nothing.
+    if not all_dfs and date_posted != "all":
+        for q in search_queries[:10]:
+            df = fetch_jobs_from_api(q, num_pages=max(1, num_pages_per_query), date_posted="all")
+            if df is not None and not df.empty:
+                all_dfs.append(df)
 
     if not all_dfs:
         return pd.DataFrame()

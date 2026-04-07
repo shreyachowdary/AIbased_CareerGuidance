@@ -5,6 +5,7 @@ CareerPath AI - Production-quality career guidance app.
 import sys
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -53,7 +54,6 @@ from src.job_fetcher import fetch_recent_jobs_for_roles, get_jsearch_api_key, se
 from src.job_links import job_board_search_links
 from src.gap_descriptions import get_gap_description
 from src.course_recommendations import get_course_options
-from src.roadmap_flowchart_html import build_flowchart_html
 from src.graph import Graph
 from src.skill_graph import build_skill_cooccurrence_graph, build_learning_dependency_graph
 from src.graph_visualization import plot_skill_graph_plotly
@@ -84,18 +84,51 @@ def _skill_gap_frequency_tables(gap_df: pd.DataFrame):
     return t_m, t_g
 
 
+def _format_posted_date(value) -> str:
+    """Normalize mixed date formats; avoid misleading 1970 epoch artifacts."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s or s.lower() in {"nan", "nat", "none"}:
+        return ""
+    ts = pd.NaT
+    # Numeric payloads can be unix seconds / milliseconds.
+    try:
+        n = float(s)
+        if n > 1e12:
+            ts = pd.to_datetime(int(n), unit="ms", utc=True, errors="coerce")
+        elif n > 1e9:
+            ts = pd.to_datetime(int(n), unit="s", utc=True, errors="coerce")
+    except Exception:
+        pass
+    if pd.isna(ts):
+        ts = pd.to_datetime(s, utc=True, errors="coerce")
+    if pd.isna(ts):
+        return ""
+    # Bad coercions from sparse numeric fields often appear as 1970-01-01.
+    if int(ts.year) < 2000:
+        return pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d")
+    return ts.strftime("%Y-%m-%d")
+
+
 st.set_page_config(
     page_title="CareerPath AI | Smart Career Guidance",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
+
+# Radio labels (also used when switching mode programmatically)
+_GAP_OPT_JSEARCH = "Live listings — JSearch API (real postings)"
+_GAP_OPT_PREVIEW = "Live listings — local preview (same pipeline, sample rows)"
+_GAP_OPT_CORPUS = "Local job file — full corpus by role"
+_JSEARCH_RAPIDAPI_URL = "https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch"
 
 for key in ["resume_data", "matched_jobs", "recommendations", "job_skills", "job_metadata",
             "vectorizer", "job_embeddings", "jobs_from_api", "profile", "current_tab",
-            "recent_24h_jobs", "jobs_display_count", "roadmap_selected",
+            "recent_24h_jobs", "jobs_display_count",
             "role_market_fit_df", "role_market_stats",
-            "live_analysis", "corpus_analysis", "gaps_mode", "roadmap_mode"]:
+            "live_analysis", "corpus_analysis"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -175,7 +208,8 @@ def render_profile_gate():
                         st.rerun()
 
 
-def run_analysis(data):
+def run_analysis(data, *, return_to_tab: Optional[str] = None):
+    """Run full pipelines. ``return_to_tab`` keeps navigation e.g. on auto-run from Gaps & Courses."""
     profile = st.session_state.profile or {}
     skills = data["skills"] or []
     resume_text = build_matching_resume_text(data, profile)
@@ -260,17 +294,13 @@ def run_analysis(data):
             st.session_state.recent_24h_jobs = None
             st.session_state.jobs_from_api = False
 
-        # Default recommendations / Gaps tab: prefer live, else corpus-only
+        # Recommendations (used by Jobs / shared state); prefer live, else corpus-only
         if live.get("ok") and live.get("recommendations"):
             st.session_state.recommendations = live["recommendations"]
-            st.session_state.gaps_mode = "live"
         elif corpus.get("ok") and corpus.get("recommendations"):
             st.session_state.recommendations = corpus["recommendations"]
-            st.session_state.gaps_mode = "corpus"
         else:
             st.session_state.recommendations = empty_recommendations()
-            st.session_state.gaps_mode = "none"
-        st.session_state.roadmap_mode = st.session_state.gaps_mode
 
         # ATS vocabulary = skills from **JSearch live API** rows only (not local preview or file).
         if (
@@ -292,7 +322,7 @@ def run_analysis(data):
 
         st.session_state.resume_data = data
         st.session_state.jobs_display_count = 25
-        st.session_state.current_tab = "Analysis"
+        st.session_state.current_tab = return_to_tab or "Analysis"
         st.rerun()
     except Exception as e:
         st.error(f"Career analysis failed: {e}")
@@ -350,7 +380,12 @@ def main():
     else:
         set_jsearch_api_key(None)
 
-    with st.sidebar.expander("Web job listings (JSearch)", expanded=False):
+    gaps_tab = st.session_state.get("current_tab") == "Gaps & Courses"
+    jsearch_missing = not get_jsearch_api_key()
+    with st.sidebar.expander(
+        "Web job listings (JSearch)",
+        expanded=bool(gaps_tab and jsearch_missing),
+    ):
         st.caption("Optional RapidAPI key for live postings. Otherwise listing match uses your local file only.")
         nk = st.text_input(
             "RapidAPI key",
@@ -364,12 +399,14 @@ def main():
         with b1:
             if st.button("Apply", key="jsearch_apply_btn", use_container_width=True):
                 st.session_state.jsearch_rapidapi_key = (nk or "").strip()
+                st.session_state.pop("_gaps_autorun_jsearch_fp", None)
                 st.rerun()
         with b2:
             if st.session_state.get("jsearch_rapidapi_key") and st.button(
                 "Forget key", key="jsearch_forget_btn", use_container_width=True
             ):
                 st.session_state.jsearch_rapidapi_key = ""
+                st.session_state.pop("_gaps_autorun_jsearch_fp", None)
                 st.rerun()
         if get_jsearch_api_key():
             st.caption("Status: web listings **enabled**.")
@@ -429,15 +466,18 @@ def main():
         st.session_state.current_tab = "Home"
         st.rerun()
 
-    tab_options = ["Home", "Upload", "Analysis", "Jobs", "Gaps & Courses", "Roadmap", "Graph", "Insights"]
+    tab_options = ["Home", "Upload", "Analysis", "Jobs", "Gaps & Courses", "Graph", "Insights"]
     current = st.session_state.current_tab or "Home"
     if current in ("Gaps", "Courses"):
+        current = "Gaps & Courses"
+        st.session_state.current_tab = current
+    if current == "Roadmap":
         current = "Gaps & Courses"
         st.session_state.current_tab = current
     if current not in tab_options:
         current = "Home"
 
-    cols = st.columns(8)
+    cols = st.columns(len(tab_options))
     for col, opt in zip(cols, tab_options):
         with col:
             if st.button(opt, key=f"nav_{opt}", use_container_width=True, type="primary" if opt == current else "secondary"):
@@ -456,8 +496,6 @@ def main():
         render_matches()
     elif current == "Gaps & Courses":
         render_gaps_and_courses()
-    elif current == "Roadmap":
-        render_roadmap()
     elif current == "Graph":
         render_graph()
     else:
@@ -476,25 +514,24 @@ def render_home():
     st.markdown("---")
     st.markdown("### What CareerPath AI Does")
     st.markdown("""
-    **CareerPath AI** analyzes your resume and connects you with your next opportunity. Upload your resume, 
-    and we'll match you to real jobs, identify skill gaps, recommend courses, and give you a day-by-day 
-    learning roadmap for every skill you need.
+    **CareerPath AI** analyzes your resume and connects you with opportunities: **live listings** vs **your job file**
+    on Analysis, ranked **Jobs**, and **Gaps & Courses** built from those matches (with a best course per skill).
     """)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("📄 Upload", "Resume", "PDF, DOCX, TXT")
     with c2:
-        st.metric("🎯 Match", "Real Jobs", "24h postings")
+        st.metric("🎯 Analysis", "Live vs local", "Two views side by side")
     with c3:
-        st.metric("📚 Learn", "Courses", "Curated links")
+        st.metric("💼 Jobs", "Matches", "Listings & links")
     with c4:
-        st.metric("🗺️ Roadmap", "All Skills", "Day-by-day flow")
+        st.metric("📚 Gaps", "Skills + courses", "Best pick each")
     st.markdown("---")
     st.markdown("### How It Works")
     st.markdown("""
     1. **Upload** — Add your resume (PDF, DOCX, or TXT)
-    2. **Analyze** — Click *Run Career Analysis* to match your skills to jobs
-    3. **Explore** — Jobs, **Gaps & Courses** (per-skill learning picks), Roadmaps, and market insights
+    2. **Analyze** — Run *Career Analysis* (enable **Web job listings** for live JSearch gaps)
+    3. **Explore** — **Jobs**, **Gaps & Courses** (all links + one starred best per gap), **Insights** / **Graph**
     """)
     if st.button("Get Started → Upload Resume", type="primary", use_container_width=True):
         st.session_state.current_tab = "Upload"
@@ -755,9 +792,9 @@ def render_matches():
         pub = row.get("job_publisher") or ""
         if pub:
             meta_bits.append(str(pub))
-        posted = row.get("posted_date") or ""
+        posted = _format_posted_date(row.get("posted_date"))
         if posted:
-            meta_bits.append(str(posted)[:19])
+            meta_bits.append(posted)
         score = row.get('match_score')
         cap = f"**{row.get('company', 'N/A')}** · {row.get('location', 'N/A')}"
         if pd.notna(score):
@@ -775,11 +812,6 @@ def render_matches():
             apply_url = (row.get("job_google_link") or "").strip()
         if apply_url.lower().startswith("http"):
             st.link_button("Apply / view listing →", apply_url, type="primary")
-        else:
-            st.caption(
-                "No direct apply URL in this row (typical for offline sample data or sparse API fields). "
-                "Use the job-board searches below — queries use **title**, **company**, and **location**."
-            )
         st.markdown("**Find this job on:**")
         q_title = str(row.get("title") or "").strip()
         q_company = str(row.get("company") or "").strip()
@@ -799,129 +831,172 @@ def render_matches():
             st.rerun()
 
 
+def _best_course_option(options: list):
+    """Exactly one primary recommendation; fallback to first if flags missing."""
+    if not options:
+        return None
+    for o in options:
+        if o.get("is_best"):
+            return o
+    return options[0]
+
+
+def _gaps_resume_fingerprint(data: dict) -> str:
+    skills = tuple(sorted(str(s).lower().strip() for s in (data.get("skills") or [])[:150]))
+    return str(hash(skills))
+
+
+def _render_jsearch_key_inline(live: dict) -> None:
+    """On-page setup: sidebar is easy to miss; live gaps need a RapidAPI key or .env."""
+    st.markdown("### Connect **JSearch** for live web gaps")
+    st.markdown(
+        f"Right now gaps are based on **your local job file only**, not real-time LinkedIn / Indeed listings. "
+        f"To match **live job postings**, use a free RapidAPI key:"
+    )
+    st.markdown(
+        f"1. Sign up on **[RapidAPI](https://rapidapi.com/auth/sign-up)** and open **[JSearch]({_JSEARCH_RAPIDAPI_URL})** → Subscribe (free tier is fine).  \n"
+        "2. In **Code Snippets**, copy **`X-RapidAPI-Key`**.  \n"
+        "3. Paste it below and click **Save & run live analysis** (or paste the same key in the sidebar under *Web job listings*)."
+    )
+    st.caption(
+        "No key? You can still use **local preview** or **local job file** above — gaps will reflect your CSV, not the open web. "
+        "Or add `JSEARCH_API_KEY=...` to a `.env` file in the project folder and restart Streamlit."
+    )
+    st.text_input(
+        "RapidAPI key",
+        type="password",
+        key="gaps_inline_rapidapi_input",
+        placeholder="Paste X-RapidAPI-Key…",
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Save & run live analysis", type="primary", key="gaps_save_jsearch_btn", use_container_width=True):
+            k = (st.session_state.get("gaps_inline_rapidapi_input") or "").strip()
+            if not k:
+                st.error("Paste your RapidAPI key first.")
+            else:
+                st.session_state.jsearch_rapidapi_key = k
+                st.session_state.pop("_gaps_autorun_jsearch_fp", None)
+                st.session_state.pop("_gaps_autorun_analysis_fp", None)
+                st.rerun()
+    with c2:
+        if st.button("Skip — use local preview gaps", key="gaps_fallback_preview_btn", use_container_width=True):
+            st.session_state.gaps_view_mode = _GAP_OPT_PREVIEW
+            st.rerun()
+
+    err = live.get("error")
+    if err:
+        with st.expander("Why you may still see local data"):
+            st.write(err)
+
+
 def render_gaps_and_courses():
+    data = st.session_state.resume_data
     live = st.session_state.live_analysis or {}
     corpus = st.session_state.corpus_analysis or {}
-    if not live.get("ok") and not corpus.get("ok"):
-        st.info("Run Career Analysis first.")
-        return
 
     st.markdown("## Skill gaps and courses")
-    view = st.radio(
-        "Base recommendations on",
-        ["Live listings (JSearch or local preview)", "Local job file — by role"],
-        horizontal=True,
-        key="gaps_view_mode",
+    st.caption(
+        "Gaps come from skills required on matched postings but missing from your resume. "
+        "Each gap lists **every** suggested course search link, then **one best pick**."
     )
-    use_corpus = view.startswith("Local")
-    if use_corpus:
-        recs_hdr = corpus.get("recommendations") if corpus.get("ok") else None
-    else:
-        recs_hdr = live.get("recommendations") if live.get("ok") else None
-    if not recs_hdr:
-        st.warning("No recommendation data for this mode — run analysis with job data or enable web listings.")
+
+    if not data:
+        st.info("Upload a resume on the **Upload** tab first.")
         return
 
-    focus = (recs_hdr.get("market_role_focus") or "").strip()
-    src = recs_hdr.get("gaps_source") or ""
-    npost = int(recs_hdr.get("market_role_postings") or 0)
-    if use_corpus and focus and src == "corpus_best_role":
-        st.info(
-            f"**Local file mode:** gaps prioritize **{focus}** ({npost} postings in your dataset), then other gaps."
+    # No extra setup in this tab: auto-run analysis once when needed.
+    if (not live.get("ok")) and (not corpus.get("ok")):
+        fp = _gaps_resume_fingerprint(data)
+        if st.session_state.get("_gaps_autorun_analysis_fp") != fp:
+            st.session_state["_gaps_autorun_analysis_fp"] = fp
+            with st.spinner("Running **Career Analysis** automatically…"):
+                run_analysis(data, return_to_tab="Gaps & Courses")
+            return
+        st.warning(
+            "Analysis results are not ready yet. Add job postings under `data/raw/` (or use **Create small demo dataset** in the sidebar), "
+            "then reopen this tab."
         )
+        return
+
+    # Pick the best available source automatically, no API prompts in this view.
+    recs_hdr = None
+    use_corpus = False
+    if corpus.get("ok") and corpus.get("recommendations"):
+        use_corpus = True
+        recs_hdr = corpus.get("recommendations")
+        st.caption("Using local job file analysis for gaps and courses.")
+    elif live.get("ok") and live.get("recommendations"):
+        recs_hdr = live.get("recommendations")
+        st.caption("Using latest listing analysis for gaps and courses.")
+    else:
+        recs_hdr = None
+
+    if not recs_hdr:
+        st.warning("No recommendation data available yet. Run Career Analysis once from the Upload tab.")
+        return
+
+    if use_corpus:
+        focus = (recs_hdr.get("market_role_focus") or "").strip()
+        src = recs_hdr.get("gaps_source") or ""
+        npost = int(recs_hdr.get("market_role_postings") or 0)
+        if focus and src == "corpus_best_role":
+            st.info(
+                f"**Local file mode:** gaps emphasize **{focus}** ({npost} postings in your dataset), then other gaps."
+            )
+
+    gap_df = None
+    if not use_corpus and live.get("ok"):
+        gap_df = (live.get("recommendations") or {}).get("skill_gaps_df")
+    elif use_corpus and corpus.get("ok"):
+        gap_df = (corpus.get("recommendations") or {}).get("skill_gaps_df")
+
+    if gap_df is not None and not gap_df.empty:
+        st.markdown("### Gap overview (from matched postings)")
+        st.plotly_chart(plot_skill_match_gaps_plotly(gap_df), use_container_width=True)
 
     mwf = recs_hdr.get("missing_with_freq") or []
     if mwf:
         freq_df = pd.DataFrame(mwf, columns=["Skill", "Weight (postings)"])
-        st.markdown("### Prioritized gaps (tabular)")
+        st.markdown("### All gaps (weighted by how often they appear)")
         st.dataframe(freq_df, use_container_width=True, hide_index=True)
 
     missing = [
         (s, f)
-        for s, f in recs_hdr.get("missing_with_freq", [])[:25]
+        for s, f in recs_hdr.get("missing_with_freq", [])[:40]
         if is_valid_skill(str(s)) and is_recommendable_skill(str(s))
     ]
     mkt_sk = recs_hdr.get("market_prioritized_skills") or set()
+    if not missing:
+        st.info("No prioritized gaps for this mode — broaden your resume skills or run analysis with more job postings.")
+        return
+
+    st.markdown("### Courses per gap")
     for skill, freq in missing:
         desc = get_gap_description(skill)
         from_market = str(skill).strip().lower() in mkt_sk
         tag = (
             "local file — top role"
             if use_corpus and from_market
-            else ("listing frequency" if not use_corpus else "local file / blended")
+            else ("live postings" if not use_corpus else "local file / blended")
         )
-        with st.expander(f"**{skill}** — weight **{freq}** ({tag})"):
+        options = get_course_options(str(skill))
+        best = _best_course_option(options)
+
+        with st.expander(f"**{skill}** — seen in **{freq}** postings ({tag})"):
             st.markdown(f"**What it is:** {desc['what']}")
             st.markdown(f"**Why it matters:** {desc['why']}")
-            st.markdown(f"**Impact:** {desc['impact']}")
-            st.markdown("**Courses to close this gap:**")
-            options = get_course_options(skill)
-            if not options:
-                st.caption("No curated links — try a web search for this skill plus “course” or “certification”.")
-                continue
-            best = next((o for o in options if o.get("is_best")), options[0] if options else None)
             if best:
-                st.markdown(f"- **⭐ Best pick:** [{best['name']}]({best['url']}) — _{best['platform']}_")
-            for o in options:
-                if o != best:
-                    st.markdown(f"- [{o['name']}]({o['url']}) — _{o['platform']}_")
-
-
-def _safe_key(s: str) -> str:
-    """Sanitize string for Streamlit widget key - alphanumeric only."""
-    import re
-    return re.sub(r"[^a-zA-Z0-9_]", "_", str(s))[:50]
-
-
-def render_roadmap():
-    live = st.session_state.live_analysis or {}
-    corpus = st.session_state.corpus_analysis or {}
-    if not live.get("ok") and not corpus.get("ok"):
-        st.info("Run Career Analysis first.")
-        return
-
-    try:
-        import streamlit.components.v1 as components
-        view = st.radio(
-            "Roadmap based on",
-            ["Live listings (JSearch or local preview)", "Local job file — by role"],
-            horizontal=True,
-            key="roadmap_view_mode",
-        )
-        use_corpus = view.startswith("Local")
-        recs_src = (
-            (corpus.get("recommendations") if corpus.get("ok") else None)
-            if use_corpus
-            else (live.get("recommendations") if live.get("ok") else None)
-        )
-        if not recs_src:
-            st.warning("No roadmap for this mode.")
-            return
-        roadmap = recs_src.get("learning_roadmap") or []
-        if not roadmap:
-            st.info("No learning roadmap for this mode.")
-            return
-
-        st.markdown("## Your Learning Roadmap — All Skills")
-        st.markdown("Day-by-day flowcharts for every skill you need to build. Focus on the main topics in order.")
-        for i, item in enumerate(roadmap[:12]):
-            skill = item.get("skill", "Skill")
-            if not is_valid_skill(str(skill)) or not is_recommendable_skill(str(skill)):
-                continue
-            priority = item.get("priority", i + 1)
-            freq = item.get("frequency", 0)
-            st.markdown(f"### {priority}. {skill} — in {freq} target roles")
-            components.html(build_flowchart_html(str(skill)), height=320, scrolling=False)
-            st.markdown("**Courses:**")
-            options = get_course_options(str(skill))
-            for o in options[:3]:
-                badge = " ⭐" if o.get("is_best") else ""
-                st.markdown(f"- [{o['name']}{badge}]({o['url']}) — {o['platform']}")
-            st.divider()
-    except Exception as e:
-        st.error(f"Roadmap error: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+                st.markdown(
+                    f"**Best course (top pick):** [{best['name']}]({best['url']}) — _{best['platform']}_"
+                )
+            st.markdown("**All course options (open any to browse on that platform):**")
+            if not options:
+                st.caption("No links — try a web search for this skill plus “course” or “certification”.")
+            else:
+                for o in options:
+                    star = " ⭐ " if best and o is best else ""
+                    st.markdown(f"- {star}[{o['name']}]({o['url']}) — _{o['platform']}_")
 
 
 def render_insights():
