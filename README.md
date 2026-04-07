@@ -86,5 +86,5 @@ streamlit run app.py
 - **EDA plots**: `artifacts/eda_*.png`
 
 ## License
-
-MIT
+The project belongs to Shreya Chennupati
+Any ochanges or contributions are welcomed. 
